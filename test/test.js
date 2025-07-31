@@ -38,7 +38,7 @@ const SAFE_TX_TYPEHASH = "0xbb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6e
 
 const EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE = "shove modify pet author control topic today opera okay payment diary provide";
 const EXAMPLE_VAULT_SUBKEY_INDEX = 12345678;
-const HD_PATH = "m/44/60/0/0";
+const HD_PATH = "m/44'/60'/0'/0";
 
 function runAndWait(script, args, silent) {
     return new Promise((resolve, reject) => {
