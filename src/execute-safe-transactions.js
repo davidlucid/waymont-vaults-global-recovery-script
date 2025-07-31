@@ -9,7 +9,7 @@ const MULTI_SEND_ABI = require("./abi/MultiSend.json");
 const MULTI_SEND_ADDRESS = "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526";
 const DOMAIN_SEPARATOR_TYPEHASH = "0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218";
 const SAFE_TX_TYPEHASH = "0xbb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6efe0f941286d8";
-const HD_PATH = "m/44/60/0/0";
+const HD_PATH = "m/44'/60'/0'/0";
 
 assert(process.argv.length >= 10, "Not enough arguments supplied--you should have 8 arguments if you are calling one function, 11 if you are calling two, 14 if you are calling three, and so on.");
 assert(process.argv[2].length > 0, "The JSON-RPC provider URL you entered is not valid.");
