@@ -23,9 +23,9 @@
   },
   "homepage": "https://github.com/pentagonxyz/waymont-vaults-global-recovery-script#readme",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^2.0.2"
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0"
   },
   "dependencies": {
-    "ethers": "^5.7.2"
+    "ethers": "^6.15.0"
   }
 }
