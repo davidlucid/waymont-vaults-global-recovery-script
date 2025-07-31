@@ -52,17 +52,17 @@ function runAndWait(script, args, silent) {
 }
 
 // Get HD node child signing key for Safe
-const myNode = ethers.utils.HDNode.fromMnemonic(EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE);
+const myNode = ethers.HDNodeWallet.fromPhrase(EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE);
 const myChild = myNode.derivePath(HD_PATH + "/" + EXAMPLE_VAULT_SUBKEY_INDEX);
 const myChildWallet = new ethers.Wallet(myChild.privateKey);
 
 // Address prediction functions
 function predictWaymontSafeAdvancedSignerAddress(predictedSafeAddress, signers, threshold, deploymentNonce) {
-    const salt = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
+    const salt = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(
         ["address", "address[]", "uint256", "uint256"],
         [predictedSafeAddress, signers, threshold, deploymentNonce]
     ));
-    const initCodeHash = ethers.utils.keccak256(ethers.utils.solidityPack(
+    const initCodeHash = ethers.keccak256(ethers.solidityPacked(
         ["bytes", "address", "bytes"],
         [
             "0x3d602d80600a3d3981f3363d3d373d3d3d363d73",
@@ -70,7 +70,7 @@ function predictWaymontSafeAdvancedSignerAddress(predictedSafeAddress, signers, 
             "0x5af43d82803e903d91602b57fd5bf3"
         ]
     ));
-    const waymontSafeAdvancedSignerAddress = ethers.utils.keccak256(ethers.utils.solidityPack(
+    const waymontSafeAdvancedSignerAddress = ethers.keccak256(ethers.solidityPacked(
         ["bytes1", "address", "bytes32", "bytes32"],
         ["0xff", WAYMONT_SAFE_FACTORY_ADDRESS, salt, initCodeHash]
     ));
@@ -78,18 +78,18 @@ function predictWaymontSafeAdvancedSignerAddress(predictedSafeAddress, signers, 
 }
 
 function predictSafeAddress(initializerData, saltNonce) {
-    const salt = ethers.utils.keccak256(ethers.utils.solidityPack(
+    const salt = ethers.keccak256(ethers.solidityPacked(
         ["bytes32", "uint256"],
-        [ethers.utils.keccak256(initializerData), saltNonce]
+        [ethers.keccak256(initializerData), saltNonce]
     ));
-    const initCodeHash = ethers.utils.keccak256(ethers.utils.solidityPack(
+    const initCodeHash = ethers.keccak256(ethers.solidityPacked(
         ["bytes", "uint256"],
         [
             PROXY_BYTECODE,
-            ethers.utils.hexZeroPad(SAFE_SINGLETON_ADDRESS, 32)
+            ethers.hexZeroPad(SAFE_SINGLETON_ADDRESS, 32)
         ]
     ));
-    const safeAddress = ethers.utils.keccak256(ethers.utils.solidityPack(
+    const safeAddress = ethers.keccak256(ethers.solidityPacked(
         ["bytes1", "address", "bytes32", "bytes32"],
         ["0xff", SAFE_PROXY_FACTORY_ADDRESS, salt, initCodeHash]
     ));
@@ -108,7 +108,11 @@ describe("Policy guardian recovery script", function () {
     
         // Deploy Safe singleton factory
         await relayer.sendTransaction({ to: SAFE_SINGLETON_FACTORY_DEPLOYER_ADDRESS, value: "1000000000000000000" });
-        const impersonatedSafeSingletonFactoryDeployer = await ethers.getImpersonatedSigner(SAFE_SINGLETON_FACTORY_DEPLOYER_ADDRESS);
+        await hre.network.provider.request({
+            method: "hardhat_impersonateAccount",
+            params: [SAFE_SINGLETON_FACTORY_DEPLOYER_ADDRESS],
+        });
+        const impersonatedSafeSingletonFactoryDeployer = await hre.ethers.getSigner(SAFE_SINGLETON_FACTORY_DEPLOYER_ADDRESS);
         await impersonatedSafeSingletonFactoryDeployer.sendTransaction({ data: SAFE_SINGLETON_FACTORY_BYTECODE });
     
         // Deploy Safe implementation, Safe proxy factory, etc.
@@ -118,12 +122,12 @@ describe("Policy guardian recovery script", function () {
         await relayer.sendTransaction({ to: SAFE_SINGLETON_FACTORY_ADDRESS, data: "0x0000000000000000000000000000000000000000000000000000000000000000" + (COMPATIBILITY_FALLBACK_HANDLER_BYTECODE.startsWith("0x") ? COMPATIBILITY_FALLBACK_HANDLER_BYTECODE.substring(2) : COMPATIBILITY_FALLBACK_HANDLER_BYTECODE) });
 
         // Fix provider URL in case it tries to resolve localhost to ::1 (IPv6) instead of 127.0.0.1 (IPv4)
-        const providerUrl = new URL(ethers.provider.connection.url);
+        const providerUrl = new URL(hre.network.config.url);
         if (providerUrl.hostname == "localhost") providerUrl.hostname = "127.0.0.1";
         providerUrlHref = providerUrl.href;
 
         // Get chain ID
-        chainId = ethers.provider.network.chainId;
+        { chainId } = await ethers.provider.getNetwork();
     });
 
     let snapshotId;
@@ -169,12 +173,16 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
     // Set policy guardian on WaymontSafePolicyGuardianSigner
     const waymontSafePolicyGuardianSignerContract = new ethers.Contract(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_ABI, relayer);
     await relayer.sendTransaction({ to: WAYMONT_POLICY_GUARDIAN_MANAGER_ADDRESS, value: "1000000000000000000" });
-    const impersonatedPolicyGuardianManager = await ethers.getImpersonatedSigner(WAYMONT_POLICY_GUARDIAN_MANAGER_ADDRESS);
+    await hre.network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [WAYMONT_POLICY_GUARDIAN_MANAGER_ADDRESS],
+    });
+    const impersonatedPolicyGuardianManager = await hre.ethers.getSigner(WAYMONT_POLICY_GUARDIAN_MANAGER_ADDRESS);
     const policyGuardian = ethers.Wallet.createRandom();
     await waymontSafePolicyGuardianSignerContract.connect(impersonatedPolicyGuardianManager).setPolicyGuardian(policyGuardian.address);
     
     // Test on Safe with policy guardian and 3 EOA signers; also test on Safe with policy guardian and advanced signer (with 1 underlying signer, 2 underlying signers, and 3 underlying signers)
-    const safeInterface = new ethers.utils.Interface(SAFE_ABI);
+    const safeInterface = new ethers.Interface(SAFE_ABI);
     const extraSigners = [ethers.Wallet.createRandom().address, ethers.Wallet.createRandom().address];
 
     // Safe init params
@@ -227,10 +235,10 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         ];
 
         // Encode MultiSend.multiSend function data
-        const multiSendInterface = new ethers.utils.Interface(MULTI_SEND_ABI);
+        const multiSendInterface = new ethers.Interface(MULTI_SEND_ABI);
 
         let packedTransactions = "0x";
-        for (const tx of transactions) packedTransactions += ethers.utils.solidityPack(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.utils.hexDataLength(tx.data), tx.data]).substring(2);
+        for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.hexDataLength(tx.data), tx.data]).substring(2);
 
         let data = multiSendInterface.encodeFunctionData("multiSend", [packedTransactions]);
 
@@ -247,40 +255,40 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         // Sign params for Safe.execTransaction
         const nonce = await mySafeContract.nonce();
 
-        const encodedData = ethers.utils.defaultAbiCoder.encode(
+        const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'address', 'uint256', 'bytes32', 'uint8', 'uint256', 'uint256', 'uint256', 'address', 'address', 'uint256'],
             [SAFE_TX_TYPEHASH, to, value, ethers.utils.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
         );
 
-        const safeTxHash = ethers.utils.keccak256(encodedData);
-        const domainSeparator = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, chainId, mySafeContract.address]));
+        const safeTxHash = ethers.keccak256(encodedData);
+        const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, chainId, mySafeContract.address]));
 
-        const encodedTransactionData = ethers.utils.solidityPack(
+        const encodedTransactionData = ethers.solidityPacked(
             ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
             ['0x19', '0x01', domainSeparator, safeTxHash],
         );
 
-        const overlyingHash = ethers.utils.keccak256(encodedTransactionData);
+        const overlyingHash = ethers.keccak256(encodedTransactionData);
         const policyGuardianSignatureUnserialized = policyGuardian._signingKey().signDigest(overlyingHash);
-        const policyGuardianSignature = ethers.utils.solidityPack(["bytes32", "bytes32", "uint8"], [policyGuardianSignatureUnserialized.r, policyGuardianSignatureUnserialized.s, policyGuardianSignatureUnserialized.v]);
+        const policyGuardianSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [policyGuardianSignatureUnserialized.r, policyGuardianSignatureUnserialized.s, policyGuardianSignatureUnserialized.v]);
 
         // Generate overlying policy guardian smart contract signature
-        const policyGuardianOverlyingSignaturePointer = ethers.utils.solidityPack(
+        const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
             ["bytes32", "uint256", "uint8"],
             [
-                ethers.utils.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+                ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
                 65,
                 0
             ]
         );
-        const policyGuardianOverlyingSignatureData = ethers.utils.solidityPack(
+        const policyGuardianOverlyingSignatureData = ethers.solidityPacked(
             ["uint256", "bytes"],
             [
                 65,
                 policyGuardianSignature
             ]
         );
-        const packedOverlyingSignature = ethers.utils.solidityPack(["bytes", "bytes"], [policyGuardianOverlyingSignaturePointer, policyGuardianOverlyingSignatureData]);
+        const packedOverlyingSignature = ethers.solidityPacked(["bytes", "bytes"], [policyGuardianOverlyingSignaturePointer, policyGuardianOverlyingSignatureData]);
     
         // Dispatch TX
         console.log("Submitting Safe.execTransaction (in test.js)...");
