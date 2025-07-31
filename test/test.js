@@ -127,7 +127,7 @@ describe("Policy guardian recovery script", function () {
         providerUrlHref = providerUrl.href;
 
         // Get chain ID
-        { chainId } = await ethers.provider.getNetwork();
+        chainId = hre.network.config.chainId;
     });
 
     let snapshotId;
