@@ -44,6 +44,7 @@ Run the following commands to intiate vault recovery:
 ```
 git clone https://github.com/pentagonxyz/waymont-vaults-global-recovery-script
 cd waymont-vaults-global-recovery-script
+npm i
 npm run initiate-recovery http://localhost:8545 0xYOURWALLETCONTRACTADDRESSHERE YOURVAULTSUBKEYINDEX 0xFUNDEDPRIVATEKEYFORGAS "type your mnemonic phrase here"
 ```
 
