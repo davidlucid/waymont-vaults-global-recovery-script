@@ -22,12 +22,12 @@ for (var i = 8; i < process.argv.length; i += 3) assert(process.argv[i].length >
 for (var i = 9; i < process.argv.length; i += 3) assert(/^\d+$/.test(process.argv[i]), "One or more function call value parameters is not valid.");
 
 // Instantiate provider, EOA, and contracts
-let myProvider = new ethers.providers.JsonRpcProvider(process.argv[2]);
+let myProvider = new ethers.JsonRpcProvider(process.argv[2]);
 let myFundedAccountForGas = new ethers.Wallet(process.argv[5], myProvider);
 let mySafeContract = new ethers.Contract(process.argv[3], SAFE_ABI, myFundedAccountForGas);
 
 // Get HD node child signing key for Safe specified by user
-const myNode = ethers.utils.HDNode.fromMnemonic(process.argv[6]);
+const myNode = ethers.HDNodeWallet.fromPhrase(process.argv[6]);
 const myChild = myNode.derivePath(HD_PATH + `/${process.argv[4]}`);
 const myChildWallet = new ethers.Wallet(myChild.privateKey);
 const myChildSigningKey = myChildWallet._signingKey();
@@ -55,10 +55,10 @@ const myChildSigningKey = myChildWallet._signingKey();
     }
 
     // Encode MultiSend.multiSend function data
-    const multiSendInterface = new ethers.utils.Interface(MULTI_SEND_ABI);
+    const multiSendInterface = new ethers.Interface(MULTI_SEND_ABI);
 
     let packedTransactions = "0x";
-    for (const tx of transactions) packedTransactions += ethers.utils.solidityPack(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, tx.value ?? 0, ethers.utils.hexDataLength(tx.data), tx.data]).substring(2);
+    for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, tx.value ?? 0, ethers.hexDataLength(tx.data), tx.data]).substring(2);
 
     let data = multiSendInterface.encodeFunctionData("multiSend", [packedTransactions]);
 
@@ -75,22 +75,22 @@ const myChildSigningKey = myChildWallet._signingKey();
     // Sign params for Safe.execTransaction
     const nonce = await mySafeContract.nonce();
 
-    const encodedData = ethers.utils.defaultAbiCoder.encode(
+    const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(
         ['bytes32', 'address', 'uint256', 'bytes32', 'uint8', 'uint256', 'uint256', 'uint256', 'address', 'address', 'uint256'],
-        [SAFE_TX_TYPEHASH, to, value, ethers.utils.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
+        [SAFE_TX_TYPEHASH, to, value, ethers.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
     );
 
-    const safeTxHash = ethers.utils.keccak256(encodedData);
-    const domainSeparator = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, mySafeContract.address]));
+    const safeTxHash = ethers.keccak256(encodedData);
+    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, mySafeContract.address]));
 
-    const encodedTransactionData = ethers.utils.solidityPack(
+    const encodedTransactionData = ethers.solidityPacked(
         ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
         ['0x19', '0x01', domainSeparator, safeTxHash],
     );
 
-    const overlyingHash = ethers.utils.keccak256(encodedTransactionData);
+    const overlyingHash = ethers.keccak256(encodedTransactionData);
     const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
-    const userSignature = ethers.utils.solidityPack(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
+    const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
     // Dispatch TX
     console.log("Submitting Safe.execTransaction... (in execute-safe-transactions.js)");
