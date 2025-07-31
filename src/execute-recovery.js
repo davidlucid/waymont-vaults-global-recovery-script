@@ -23,16 +23,16 @@ assert(process.argv[5].length === 66 && process.argv[5].substring(0, 2) === "0x"
 assert(process.argv[6].split(" ").length === 12, "The mnemonic seed phrase you entered is not valid (should be 12 words separated by spaces).");
 
 // Instantiate provider, EOA, and contracts
-let myProvider = new ethers.providers.JsonRpcProvider(process.argv[2]);
+let myProvider = new ethers.JsonRpcProvider(process.argv[2]);
 let myFundedAccountForGas = new ethers.Wallet(process.argv[5], myProvider);
 let mySafeContract = new ethers.Contract(process.argv[3], SAFE_ABI, myFundedAccountForGas);
 let waymontSafePolicyGuardianSignerContract = new ethers.Contract(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_ABI, myFundedAccountForGas);
 
 // Get HD node child signing key for Safe specified by user
-const myNode = ethers.utils.HDNode.fromMnemonic(process.argv[6]);
+const myNode = ethers.HDNodeWallet.fromPhrase(process.argv[6]);
 const myChild = myNode.derivePath(HD_PATH + `/${process.argv[4]}`);
 const myChildWallet = new ethers.Wallet(myChild.privateKey);
-const myChildSigningKey = myChildWallet._signingKey();
+const myChildSigningKey = myChildWallet.signingKey;
 
 // Run async code
 (async function() {
@@ -101,22 +101,22 @@ const myChildSigningKey = myChildWallet._signingKey();
 
             // Generate signature for disablePolicyGuardianWithoutPolicyGuardian
             const nonce = await waymontSafePolicyGuardianSignerContract.nonces(mySafeContract.address);
-            const underlyingHash = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["bytes32", "address", "uint256"], [DISABLE_POLICY_GUARDIAN_TYPEHASH, mySafeContract.address, nonce]));
-            const domainSeparator = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, waymontSafePolicyGuardianSignerContract.address]));
-            const overlyingHash = ethers.utils.keccak256(ethers.utils.solidityPack(["bytes1", "bytes1", "bytes32", "bytes32"], [0x19, 0x01, domainSeparator, underlyingHash]));
+            const underlyingHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "address", "uint256"], [DISABLE_POLICY_GUARDIAN_TYPEHASH, mySafeContract.address, nonce]));
+            const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, waymontSafePolicyGuardianSignerContract.address]));
+            const overlyingHash = ethers.keccak256(ethers.solidityPacked(["bytes1", "bytes1", "bytes32", "bytes32"], [0x19, 0x01, domainSeparator, underlyingHash]));
             const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
-            const userSignature = ethers.utils.solidityPack(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
+            const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
             // Generate dummy overlying policy guardian smart contract signature
-            const policyGuardianOverlyingSignaturePointer = ethers.utils.solidityPack(
+            const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
                 ["bytes32", "uint256", "uint8"],
                 [
-                    ethers.utils.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+                    ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
                     2 * 65,
                     0
                 ]
             );
-            const policyGuardianOverlyingSignatureData = ethers.utils.solidityPack(
+            const policyGuardianOverlyingSignatureData = ethers.solidityPacked(
                 ["uint256", "bytes"],
                 [
                     65,
@@ -129,27 +129,27 @@ const myChildSigningKey = myChildWallet._signingKey();
 
             if (myWaymontSafeAdvancedSignerContract === undefined) {
                 if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
-                    packedOverlyingSignatures = ethers.utils.solidityPack(
+                    packedOverlyingSignatures = ethers.solidityPacked(
                         ["bytes", "bytes", "bytes"],
                         [policyGuardianOverlyingSignaturePointer, userSignature, policyGuardianOverlyingSignatureData]
                     );
                 } else {
-                    packedOverlyingSignatures = ethers.utils.solidityPack(
+                    packedOverlyingSignatures = ethers.solidityPacked(
                         ["bytes", "bytes", "bytes"],
                         [userSignature, policyGuardianOverlyingSignaturePointer, policyGuardianOverlyingSignatureData]
                     );
                 }
             } else {
                 // Generate overlying WaymontSafeAdvancedSigner signature
-                const advancedSignerOverlyingSignaturePointer = ethers.utils.solidityPack(
+                const advancedSignerOverlyingSignaturePointer = ethers.solidityPacked(
                     ["bytes32", "uint256", "uint8"],
                     [
-                        ethers.utils.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
+                        ethers.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
                         (65 * 2) + 32 + 65,
                         0
                     ]
                 );
-                const advancedSignerOverlyingSignatureData = ethers.utils.solidityPack(
+                const advancedSignerOverlyingSignatureData = ethers.solidityPacked(
                     ["uint256", "bytes"],
                     [
                         65,
@@ -159,12 +159,12 @@ const myChildSigningKey = myChildWallet._signingKey();
 
                 // Pack all overlying signatures in correct order
                 if (myWaymontSafeAdvancedSignerContract.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
-                    packedOverlyingSignatures = ethers.utils.solidityPack(
+                    packedOverlyingSignatures = ethers.solidityPacked(
                         ["bytes", "bytes", "bytes", "bytes"],
                         [policyGuardianOverlyingSignaturePointer, advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]
                     );
                 } else {
-                    packedOverlyingSignatures = ethers.utils.solidityPack(
+                    packedOverlyingSignatures = ethers.solidityPacked(
                         ["bytes", "bytes", "bytes", "bytes"],
                         [advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]
                     );
@@ -297,10 +297,10 @@ const myChildSigningKey = myChildWallet._signingKey();
     }
 
     // Encode MultiSend.multiSend function data
-    const multiSendInterface = new ethers.utils.Interface(MULTI_SEND_ABI);
+    const multiSendInterface = new ethers.Interface(MULTI_SEND_ABI);
 
     let packedTransactions = "0x";
-    for (const tx of transactions) packedTransactions += ethers.utils.solidityPack(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.utils.hexDataLength(tx.data), tx.data]).substring(2);
+    for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.hexDataLength(tx.data), tx.data]).substring(2);
 
     let data = multiSendInterface.encodeFunctionData("multiSend", [packedTransactions]);
 
@@ -317,33 +317,33 @@ const myChildSigningKey = myChildWallet._signingKey();
     // Sign params for Safe.execTransaction
     const nonce = await mySafeContract.nonce();
 
-    const encodedData = ethers.utils.defaultAbiCoder.encode(
+    const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(
         ['bytes32', 'address', 'uint256', 'bytes32', 'uint8', 'uint256', 'uint256', 'uint256', 'address', 'address', 'uint256'],
         [SAFE_TX_TYPEHASH, to, value, ethers.utils.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
     );
 
-    const safeTxHash = ethers.utils.keccak256(encodedData);
-    const domainSeparator = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, mySafeContract.address]));
+    const safeTxHash = ethers.keccak256(encodedData);
+    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, mySafeContract.address]));
 
-    const encodedTransactionData = ethers.utils.solidityPack(
+    const encodedTransactionData = ethers.solidityPacked(
         ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
         ['0x19', '0x01', domainSeparator, safeTxHash],
     );
 
-    const overlyingHash = ethers.utils.keccak256(encodedTransactionData);
+    const overlyingHash = ethers.keccak256(encodedTransactionData);
     const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
-    const userSignature = ethers.utils.solidityPack(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
+    const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
     // Generate dummy overlying policy guardian smart contract signature
-    const policyGuardianOverlyingSignaturePointer = ethers.utils.solidityPack(
+    const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
         ["bytes32", "uint256", "uint8"],
         [
-            ethers.utils.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+            ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
             2 * 65,
             0
         ]
     );
-    const policyGuardianOverlyingSignatureData = ethers.utils.solidityPack(
+    const policyGuardianOverlyingSignatureData = ethers.solidityPacked(
         ["uint256", "bytes"],
         [
             65,
@@ -356,27 +356,27 @@ const myChildSigningKey = myChildWallet._signingKey();
 
     if (myWaymontSafeAdvancedSignerContract === undefined) {
         if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
-            packedOverlyingSignatures = ethers.utils.solidityPack(
+            packedOverlyingSignatures = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes"],
                 [policyGuardianOverlyingSignaturePointer, userSignature, policyGuardianOverlyingSignatureData]
             );
         } else {
-            packedOverlyingSignatures = ethers.utils.solidityPack(
+            packedOverlyingSignatures = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes"],
                 [userSignature, policyGuardianOverlyingSignaturePointer, policyGuardianOverlyingSignatureData]
             );
         }
     } else {
         // Generate overlying WaymontSafeAdvancedSigner signature
-        const advancedSignerOverlyingSignaturePointer = ethers.utils.solidityPack(
+        const advancedSignerOverlyingSignaturePointer = ethers.solidityPacked(
             ["bytes32", "uint256", "uint8"],
             [
-                ethers.utils.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
+                ethers.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
                 (65 * 2) + 32 + 65,
                 0
             ]
         );
-        const advancedSignerOverlyingSignatureData = ethers.utils.solidityPack(
+        const advancedSignerOverlyingSignatureData = ethers.solidityPacked(
             ["uint256", "bytes"],
             [
                 65,
@@ -386,12 +386,12 @@ const myChildSigningKey = myChildWallet._signingKey();
 
         // Pack overlying signatures
         if (myWaymontSafeAdvancedSignerContract.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
-            packedOverlyingSignatures = ethers.utils.solidityPack(
+            packedOverlyingSignatures = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes", "bytes"],
                 [policyGuardianOverlyingSignaturePointer, advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]
             );
         } else {
-            packedOverlyingSignatures = ethers.utils.solidityPack(
+            packedOverlyingSignatures = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes", "bytes"],
                 [advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]
             );
