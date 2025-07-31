@@ -42,7 +42,8 @@ Note that if Waymont has globally disabled the relay guardian/transaction policy
 Run the following commands to intiate vault recovery:
 
 ```
-git clone https://github.com/pentagonxyz/waymont-vaults-global-recovery-script
+git clone https://github.com/davidlucid/waymont-vaults-global-recovery-script
+git checkout ethers-v6
 cd waymont-vaults-global-recovery-script
 npm i
 npm run initiate-recovery http://localhost:8545 0xYOURWALLETCONTRACTADDRESSHERE YOURVAULTSUBKEYINDEX 0xFUNDEDPRIVATEKEYFORGAS "type your mnemonic phrase here"
