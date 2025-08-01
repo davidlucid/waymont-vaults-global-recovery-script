@@ -43,8 +43,8 @@ Run the following commands to intiate vault recovery:
 
 ```
 git clone https://github.com/davidlucid/waymont-vaults-global-recovery-script
-git checkout ethers-v6
 cd waymont-vaults-global-recovery-script
+git checkout ethers-v6
 npm i
 npm run initiate-recovery http://localhost:8545 0xYOURWALLETCONTRACTADDRESSHERE YOURVAULTSUBKEYINDEX 0xFUNDEDPRIVATEKEYFORGAS "type your mnemonic phrase here"
 ```
