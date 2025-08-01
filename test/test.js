@@ -91,7 +91,7 @@ function predictSafeAddress(initializerData, saltNonce) {
         ["bytes", "uint256"],
         [
             PROXY_BYTECODE,
-            ethers.hexZeroPad(SAFE_SINGLETON_ADDRESS, 32)
+            ethers.zeroPadValue(SAFE_SINGLETON_ADDRESS, 32)
         ]
     ));
     const safeAddress = ethers.keccak256(ethers.solidityPacked(
@@ -132,7 +132,7 @@ describe("Policy guardian recovery script", function () {
         providerUrlHref = providerUrl.href;
 
         // Get chain ID
-        chainId = hre.network.config.chainId;
+        chainId = (await ethers.provider.getNetwork()).chainId;
     });
 
     let snapshotId;
@@ -148,7 +148,7 @@ describe("Policy guardian recovery script", function () {
         const [relayer] = await ethers.getSigners();
 
         // Deploy WaymontSafeFactory
-        await relayer.sendTransaction({ to: SAFE_SINGLETON_FACTORY_ADDRESS, data: "0x0000000000000000000000000000000000000000000000000000000000000000" + (WAYMONT_SAFE_FACTORY_BYTECODE.startsWith("0x") ? WAYMONT_SAFE_FACTORY_BYTECODE.substring(2) : WAYMONT_SAFE_FACTORY_BYTECODE) + ethers.utils.defaultAbiCoder.encode(["address"], [WAYMONT_POLICY_GUARDIAN_MANAGER_ADDRESS]).substring(2) });
+        await relayer.sendTransaction({ to: SAFE_SINGLETON_FACTORY_ADDRESS, data: "0x0000000000000000000000000000000000000000000000000000000000000000" + (WAYMONT_SAFE_FACTORY_BYTECODE.startsWith("0x") ? WAYMONT_SAFE_FACTORY_BYTECODE.substring(2) : WAYMONT_SAFE_FACTORY_BYTECODE) + ethers.AbiCoder.defaultAbiCoder().encode(["address"], [WAYMONT_POLICY_GUARDIAN_MANAGER_ADDRESS]).substring(2) });
     });
 
     it("Scripts should recover the Safe from the policy guardian with the user initiating recovery (without any underlying signers on the advanced signer contract)", () => recoverSafeFromPolicyGuardian(0));
@@ -192,9 +192,9 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
 
     // Safe init params
     const initialOverlyingSigners = advancedSignerUnderlyingSignerCount > 0 ? [
-        waymontSafePolicyGuardianSignerContract.address
+        waymontSafePolicyGuardianSignerContract.target
     ] : [
-        waymontSafePolicyGuardianSignerContract.address,
+        waymontSafePolicyGuardianSignerContract.target,
         myChildWallet.address,
         extraSigners[0],
         extraSigners[1]
@@ -230,11 +230,11 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         // Generate transactions to send
         const transactions = [
             {
-                to: mySafeContract.address,
+                to: mySafeContract.target,
                 data: mySafeContract.interface.encodeFunctionData("addOwnerWithThreshold", [predictedAdvancedSignerAddress, 2])
             },
             {
-                to: waymontSafeFactoryContract.address,
+                to: waymontSafeFactoryContract.target,
                 data: waymontSafeFactoryContract.interface.encodeFunctionData("createAdvancedSigner", [safeAddress, underlyingSigners, underlyingThreshold, advancedSignerDeploymentNonce])
             },
         ];
@@ -243,7 +243,7 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         const multiSendInterface = new ethers.Interface(MULTI_SEND_ABI);
 
         let packedTransactions = "0x";
-        for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.hexDataLength(tx.data), tx.data]).substring(2);
+        for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.dataLength(tx.data), tx.data]).substring(2);
 
         let data = multiSendInterface.encodeFunctionData("multiSend", [packedTransactions]);
 
@@ -262,11 +262,11 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
 
         const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'address', 'uint256', 'bytes32', 'uint8', 'uint256', 'uint256', 'uint256', 'address', 'address', 'uint256'],
-            [SAFE_TX_TYPEHASH, to, value, ethers.utils.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
+            [SAFE_TX_TYPEHASH, to, value, ethers.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
         );
 
         const safeTxHash = ethers.keccak256(encodedData);
-        const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, chainId, mySafeContract.address]));
+        const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, chainId, mySafeContract.target]));
 
         const encodedTransactionData = ethers.solidityPacked(
             ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
@@ -274,14 +274,14 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         );
 
         const overlyingHash = ethers.keccak256(encodedTransactionData);
-        const policyGuardianSignatureUnserialized = policyGuardian._signingKey().signDigest(overlyingHash);
+        const policyGuardianSignatureUnserialized = policyGuardian.signingKey.sign(overlyingHash);
         const policyGuardianSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [policyGuardianSignatureUnserialized.r, policyGuardianSignatureUnserialized.s, policyGuardianSignatureUnserialized.v]);
 
         // Generate overlying policy guardian smart contract signature
         const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
             ["bytes32", "uint256", "uint8"],
             [
-                ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+                ethers.zeroPadValue(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
                 65,
                 0
             ]
@@ -314,13 +314,13 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         const safeOwners = await mySafeContract.getOwners();
         expect(safeOwners.length).to.be.equal(2);
         expect(safeOwners[0].toLowerCase()).to.be.equal(predictedAdvancedSignerAddress.toLowerCase());
-        expect(safeOwners[1].toLowerCase()).to.be.equal(waymontSafePolicyGuardianSignerContract.address.toLowerCase());
+        expect(safeOwners[1].toLowerCase()).to.be.equal(waymontSafePolicyGuardianSignerContract.target.toLowerCase());
         expect(await mySafeContract.getThreshold()).to.equal(2);
     } else {
         // Assert signers on Safe are correct
         const safeOwners = await mySafeContract.getOwners();
         expect(safeOwners.length).to.be.equal(4);
-        expect(safeOwners[0].toLowerCase()).to.be.equal(waymontSafePolicyGuardianSignerContract.address.toLowerCase());
+        expect(safeOwners[0].toLowerCase()).to.be.equal(waymontSafePolicyGuardianSignerContract.target.toLowerCase());
         expect(safeOwners[1].toLowerCase()).to.be.equal(myChildWallet.address.toLowerCase());
         expect(await mySafeContract.getThreshold()).to.equal(2);
     }
@@ -336,7 +336,7 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
             providerUrlHref,
             safeAddress,
             EXAMPLE_VAULT_SUBKEY_INDEX,
-            relayer2._signingKey().privateKey,
+            relayer2.signingKey.privateKey,
             EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE
         ], true));
 
@@ -355,7 +355,7 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
             providerUrlHref,
             safeAddress,
             EXAMPLE_VAULT_SUBKEY_INDEX,
-            relayer2._signingKey().privateKey,
+            relayer2.signingKey.privateKey,
             EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE
         ]);
     
@@ -371,7 +371,7 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
             providerUrlHref,
             safeAddress,
             EXAMPLE_VAULT_SUBKEY_INDEX,
-            relayer2._signingKey().privateKey,
+            relayer2.signingKey.privateKey,
             EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE
         ], true));
     
@@ -385,7 +385,7 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         providerUrlHref,
         safeAddress,
         EXAMPLE_VAULT_SUBKEY_INDEX,
-        relayer2._signingKey().privateKey,
+        relayer2.signingKey.privateKey,
         EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE
     ]);
 
@@ -415,9 +415,9 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
         providerUrlHref,
         safeAddress,
         EXAMPLE_VAULT_SUBKEY_INDEX,
-        relayer2._signingKey().privateKey,
+        relayer2.signingKey.privateKey,
         EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE,
-        storageContract.address,
+        storageContract.target,
         exampleCall1Data,
         "0",
         "0x0000000000000000000000000000000000002222",
@@ -428,5 +428,5 @@ async function recoverSafeFromPolicyGuardian(advancedSignerUnderlyingSignerCount
     // Assertions
     expect(await storageContract.retrieve(safeAddress)).to.equal(5678);
     const dummyEthBalanceAfter = await ethers.provider.getBalance("0x0000000000000000000000000000000000002222");
-    expect(dummyEthBalanceAfter.sub(dummyEthBalanceBefore)).to.equal(1234);
+    expect(dummyEthBalanceAfter - dummyEthBalanceBefore).to.equal(1234);
 }

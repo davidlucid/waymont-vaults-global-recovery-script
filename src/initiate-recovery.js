@@ -45,10 +45,10 @@ const myChildSigningKey = myChildWallet.signingKey;
     assert(policyGuardian !== "0x0000000000000000000000000000000000000000" && !policyGuardianPermanentlyDisabled, "Policy guardian has already been disabled by Waymont. Use the recovery execution script instead.");
 
     // Validate WaymontSafePolicyGuardianSigner contract state for the specified Safe
-    let alreadyDisabled = await waymontSafePolicyGuardianSignerContract.policyGuardianDisabled(mySafeContract.address);
+    let alreadyDisabled = await waymontSafePolicyGuardianSignerContract.policyGuardianDisabled(mySafeContract.target);
     assert(!alreadyDisabled, "Policy guardian has already been disabled on this Safe. Use the recovery execution script instead.");
-    let timelock = await waymontSafePolicyGuardianSignerContract.getPolicyGuardianTimelock(mySafeContract.address);
-    let queueTimestamp = await waymontSafePolicyGuardianSignerContract.disablePolicyGuardianQueueTimestamps(mySafeContract.address);
+    let timelock = await waymontSafePolicyGuardianSignerContract.getPolicyGuardianTimelock(mySafeContract.target);
+    let queueTimestamp = await waymontSafePolicyGuardianSignerContract.disablePolicyGuardianQueueTimestamps(mySafeContract.target);
     assert(queueTimestamp == 0, queueTimestamp + timelock <= (new Date()).getTime() / 1000 ? "Timelock has already passed. Use the recovery execution script instead." : "Safe recovery has been initiated but timelock has not passed. " + (queueTimestamp + timelock - (new Date()).getTime() / 1000) + " seconds to go.");
 
     // Ensure Safe threshold == 2
@@ -82,18 +82,18 @@ const myChildSigningKey = myChildWallet.signingKey;
     }
 
     // Generate signature for queueDisablePolicyGuardian
-    const nonce = await waymontSafePolicyGuardianSignerContract.nonces(mySafeContract.address);
-    const underlyingHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "address", "uint256"], [QUEUE_DISABLE_POLICY_GUARDIAN_TYPEHASH, mySafeContract.address, nonce]));
-    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, waymontSafePolicyGuardianSignerContract.address]));
-    const overlyingHash = ethers.keccak256(ethers.solidityPacked(["bytes1", "bytes1", "bytes32", "bytes32"], [0x19, 0x01, domainSeparator, underlyingHash]));
-    const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
+    const nonce = await waymontSafePolicyGuardianSignerContract.nonces(mySafeContract.target);
+    const underlyingHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "address", "uint256"], [QUEUE_DISABLE_POLICY_GUARDIAN_TYPEHASH, mySafeContract.target, nonce]));
+    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, (await myProvider.getNetwork()).chainId, waymontSafePolicyGuardianSignerContract.target]));
+    const overlyingHash = ethers.keccak256(ethers.solidityPacked(["bytes1", "bytes1", "bytes32", "bytes32"], ['0x19', '0x01', domainSeparator, underlyingHash]));
+    const userSignatureUnserialized = myChildSigningKey.sign(overlyingHash);
     const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
     // Generate dummy overlying policy guardian smart contract signature
     const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
         ["bytes32", "uint256", "uint8"],
         [
-            ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+            ethers.zeroPadValue(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
             2 * 65,
             0
         ]
@@ -110,7 +110,7 @@ const myChildSigningKey = myChildWallet.signingKey;
     let packedOverlyingSignaturesForQueueing;
 
     if (myWaymontSafeAdvancedSignerContract === undefined) {
-        if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
+        if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.target.toLowerCase()) {
             packedOverlyingSignaturesForQueueing = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes"],
                 [policyGuardianOverlyingSignaturePointer, userSignature, policyGuardianOverlyingSignatureData]
@@ -126,7 +126,7 @@ const myChildSigningKey = myChildWallet.signingKey;
         const advancedSignerOverlyingSignaturePointer = ethers.solidityPacked(
             ["bytes32", "uint256", "uint8"],
             [
-                ethers.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
+                ethers.zeroPadValue(myWaymontSafeAdvancedSignerContract.target, 32),
                 (65 * 2) + 32 + 65,
                 0
             ]
@@ -140,7 +140,7 @@ const myChildSigningKey = myChildWallet.signingKey;
         );
 
         // Pack overlying signatures
-        if (myWaymontSafeAdvancedSignerContract.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
+        if (myWaymontSafeAdvancedSignerContract.target.toLowerCase() > waymontSafePolicyGuardianSignerContract.target.toLowerCase()) {
             packedOverlyingSignaturesForQueueing = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes", "bytes"],
                 [policyGuardianOverlyingSignaturePointer, advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]
@@ -155,7 +155,7 @@ const myChildSigningKey = myChildWallet.signingKey;
 
     // Dispatch TX
     console.log("Submitting WaymontSafePolicyGuardianSigner.queueDisablePolicyGuardian...");
-    let tx = await waymontSafePolicyGuardianSignerContract.queueDisablePolicyGuardian(mySafeContract.address, packedOverlyingSignaturesForQueueing);
+    let tx = await waymontSafePolicyGuardianSignerContract.queueDisablePolicyGuardian(mySafeContract.target, packedOverlyingSignaturesForQueueing);
     console.log("Submitted WaymontSafePolicyGuardianSigner.queueDisablePolicyGuardian with transaction hash:", tx.hash);
     console.log("Waiting for confirmations...");
     await tx.wait();

@@ -90,11 +90,11 @@ const myChildSigningKey = myChildWallet.signingKey;
 
     if (policyGuardian !== "0x0000000000000000000000000000000000000000" && !policyGuardianPermanentlyDisabled) {
         // Validate WaymontSafePolicyGuardianSigner contract state for the specified Safe
-        const alreadyDisabled = await waymontSafePolicyGuardianSignerContract.policyGuardianDisabled(mySafeContract.address);
+        const alreadyDisabled = await waymontSafePolicyGuardianSignerContract.policyGuardianDisabled(mySafeContract.target);
 
         if (!alreadyDisabled) {
-            const timelock = (await waymontSafePolicyGuardianSignerContract.getPolicyGuardianTimelock(mySafeContract.address)).toNumber();
-            const queueTimestamp = (await waymontSafePolicyGuardianSignerContract.disablePolicyGuardianQueueTimestamps(mySafeContract.address)).toNumber();
+            const timelock = Number(await waymontSafePolicyGuardianSignerContract.getPolicyGuardianTimelock(mySafeContract.target));
+            const queueTimestamp = Number(await waymontSafePolicyGuardianSignerContract.disablePolicyGuardianQueueTimestamps(mySafeContract.target));
             assert(queueTimestamp > 0, "Wallet recovery has not been initiated. Please run the intiation script first.");
             const latestBlockTimestamp = (await myProvider.getBlock("latest")).timestamp;
             const timeRemaining = queueTimestamp + timelock - latestBlockTimestamp;
@@ -105,18 +105,18 @@ const myChildSigningKey = myChildWallet.signingKey;
             assert(queueTimestamp + timelock <= latestBlockTimestamp, "Timelock has not yet passed on-chain (judging by the latest block timestamp), though wallet recovery has been initiated. Latest block timestamp on this chain is currently " + days + " days, " + hours + " hours, " + minutes + " minutes, and " + seconds + " seconds away from the timelock ending. Wait for this duration to pass and re-run this script.");
 
             // Generate signature for disablePolicyGuardianWithoutPolicyGuardian
-            const nonce = await waymontSafePolicyGuardianSignerContract.nonces(mySafeContract.address);
-            const underlyingHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "address", "uint256"], [DISABLE_POLICY_GUARDIAN_TYPEHASH, mySafeContract.address, nonce]));
-            const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, waymontSafePolicyGuardianSignerContract.address]));
-            const overlyingHash = ethers.keccak256(ethers.solidityPacked(["bytes1", "bytes1", "bytes32", "bytes32"], [0x19, 0x01, domainSeparator, underlyingHash]));
-            const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
+            const nonce = await waymontSafePolicyGuardianSignerContract.nonces(mySafeContract.target);
+            const underlyingHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "address", "uint256"], [DISABLE_POLICY_GUARDIAN_TYPEHASH, mySafeContract.target, nonce]));
+            const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, (await myProvider.getNetwork()).chainId, waymontSafePolicyGuardianSignerContract.target]));
+            const overlyingHash = ethers.keccak256(ethers.solidityPacked(["bytes1", "bytes1", "bytes32", "bytes32"], ['0x19', '0x01', domainSeparator, underlyingHash]));
+            const userSignatureUnserialized = myChildSigningKey.sign(overlyingHash);
             const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
             // Generate dummy overlying policy guardian smart contract signature
             const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
                 ["bytes32", "uint256", "uint8"],
                 [
-                    ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+                    ethers.zeroPadValue(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
                     2 * 65,
                     0
                 ]
@@ -133,7 +133,7 @@ const myChildSigningKey = myChildWallet.signingKey;
             let packedOverlyingSignatures;
 
             if (myWaymontSafeAdvancedSignerContract === undefined) {
-                if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
+                if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.target.toLowerCase()) {
                     packedOverlyingSignatures = ethers.solidityPacked(
                         ["bytes", "bytes", "bytes"],
                         [policyGuardianOverlyingSignaturePointer, userSignature, policyGuardianOverlyingSignatureData]
@@ -149,7 +149,7 @@ const myChildSigningKey = myChildWallet.signingKey;
                 const advancedSignerOverlyingSignaturePointer = ethers.solidityPacked(
                     ["bytes32", "uint256", "uint8"],
                     [
-                        ethers.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
+                        ethers.zeroPadValue(myWaymontSafeAdvancedSignerContract.target, 32),
                         (65 * 2) + 32 + 65,
                         0
                     ]
@@ -163,7 +163,7 @@ const myChildSigningKey = myChildWallet.signingKey;
                 );
 
                 // Pack all overlying signatures in correct order
-                if (myWaymontSafeAdvancedSignerContract.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
+                if (myWaymontSafeAdvancedSignerContract.target.toLowerCase() > waymontSafePolicyGuardianSignerContract.target.toLowerCase()) {
                     packedOverlyingSignatures = ethers.solidityPacked(
                         ["bytes", "bytes", "bytes", "bytes"],
                         [policyGuardianOverlyingSignaturePointer, advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]
@@ -178,7 +178,7 @@ const myChildSigningKey = myChildWallet.signingKey;
 
             // Dispatch TX
             console.log("Submitting WaymontSafePolicyGuardianSigner.disablePolicyGuardianWithoutPolicyGuardian...");
-            let tx = await waymontSafePolicyGuardianSignerContract.disablePolicyGuardianWithoutPolicyGuardian(mySafeContract.address, packedOverlyingSignatures);
+            let tx = await waymontSafePolicyGuardianSignerContract.disablePolicyGuardianWithoutPolicyGuardian(mySafeContract.target, packedOverlyingSignatures);
             console.log("Submitted WaymontSafePolicyGuardianSigner.disablePolicyGuardianWithoutPolicyGuardian with transaction hash:", tx.hash);
             console.log("Waiting for confirmations...");
             await tx.wait();
@@ -193,13 +193,13 @@ const myChildSigningKey = myChildWallet.signingKey;
         // 2 signers on Safe to be removed (WaymontSafePolicyGuardianSigner and WaymontSafeAdvancedSigner)--and threshold should be changed from 2 to 1--and signers should be shifted
         const underlyingOwners = await myWaymontSafeAdvancedSignerContract.getOwners();
         const policyGuardianSignerContractIsFirstOwnerInLinkedList = safeOwners[0].toLowerCase() === WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS.toLowerCase();
-        assert((policyGuardianSignerContractIsFirstOwnerInLinkedList ? safeOwners[1] : safeOwners[0]).toLowerCase() === myWaymontSafeAdvancedSignerContract.address.toLowerCase(), "Unexpected error when checking if WaymontSafePolicyGuardianSigner contract is first signer in linked list of Safe owners");
+        assert((policyGuardianSignerContractIsFirstOwnerInLinkedList ? safeOwners[1] : safeOwners[0]).toLowerCase() === myWaymontSafeAdvancedSignerContract.target.toLowerCase(), "Unexpected error when checking if WaymontSafePolicyGuardianSigner contract is first signer in linked list of Safe owners");
     
         if (underlyingOwners.length > 2) {
             // Swap WaymontSafePolicyGuardianSigner for underlyingOwners[0], swap WaymontSafeAdvancedSigner for underlyingOwners[1], and add the rest of underlyingOwners (setting threshold to 1)
             transactions = [
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData(
                         "swapOwner",
                         [
@@ -210,26 +210,26 @@ const myChildSigningKey = myChildWallet.signingKey;
                     )
                 },
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData(
                         "swapOwner",
                         [
                             policyGuardianSignerContractIsFirstOwnerInLinkedList ? safeOwners[0] : "0x0000000000000000000000000000000000000001",
-                            myWaymontSafeAdvancedSignerContract.address,
+                            myWaymontSafeAdvancedSignerContract.target,
                             underlyingOwners[1]
                         ]
                     )
                 }
             ];
             for (let i = 2; i < underlyingOwners.length; i++) transactions.push({
-                to: mySafeContract.address,
+                to: mySafeContract.target,
                 data: mySafeContract.interface.encodeFunctionData("addOwnerWithThreshold", [underlyingOwners[i], 1])
             });
         } else if (underlyingOwners.length == 2) {
             // Swap WaymontSafePolicyGuardianSigner for underlyingOwners[0], set threshold to 1, and swap WaymontSafeAdvancedSigner for underlyingOwners[1]
             transactions = [
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData(
                         "swapOwner",
                         [
@@ -240,16 +240,16 @@ const myChildSigningKey = myChildWallet.signingKey;
                     )
                 },
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData("changeThreshold", [1])
                 },
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData(
                         "swapOwner",
                         [
                             policyGuardianSignerContractIsFirstOwnerInLinkedList ? safeOwners[0] : "0x0000000000000000000000000000000000000001",
-                            myWaymontSafeAdvancedSignerContract.address,
+                            myWaymontSafeAdvancedSignerContract.target,
                             underlyingOwners[1]
                         ]
                     )
@@ -259,7 +259,7 @@ const myChildSigningKey = myChildWallet.signingKey;
             // Remove WaymontSafePolicyGuardianSigner (setting threshold to 1) and swap WaymontSafeAdvancedSigner for underlyingOwners[0]
             transactions = [
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData(
                         "removeOwner",
                         [
@@ -270,12 +270,12 @@ const myChildSigningKey = myChildWallet.signingKey;
                     )
                 },
                 {
-                    to: mySafeContract.address,
+                    to: mySafeContract.target,
                     data: mySafeContract.interface.encodeFunctionData(
                         "swapOwner",
                         [
                             "0x0000000000000000000000000000000000000001",
-                            myWaymontSafeAdvancedSignerContract.address,
+                            myWaymontSafeAdvancedSignerContract.target,
                             underlyingOwners[0]
                         ]
                     )
@@ -292,7 +292,7 @@ const myChildSigningKey = myChildWallet.signingKey;
         assert(prevOwner !== undefined, "Unexpected error when getting prevOwner param for Safe.removeOwner");
         transactions = [
             {
-                to: mySafeContract.address,
+                to: mySafeContract.target,
                 data: mySafeContract.interface.encodeFunctionData(
                     "removeOwner",
                     [prevOwner, WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 1]
@@ -305,7 +305,7 @@ const myChildSigningKey = myChildWallet.signingKey;
     const multiSendInterface = new ethers.Interface(MULTI_SEND_ABI);
 
     let packedTransactions = "0x";
-    for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.hexDataLength(tx.data), tx.data]).substring(2);
+    for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, 0, ethers.dataLength(tx.data), tx.data]).substring(2);
 
     let data = multiSendInterface.encodeFunctionData("multiSend", [packedTransactions]);
 
@@ -324,11 +324,11 @@ const myChildSigningKey = myChildWallet.signingKey;
 
     const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(
         ['bytes32', 'address', 'uint256', 'bytes32', 'uint8', 'uint256', 'uint256', 'uint256', 'address', 'address', 'uint256'],
-        [SAFE_TX_TYPEHASH, to, value, ethers.utils.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
+        [SAFE_TX_TYPEHASH, to, value, ethers.keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce]
     );
 
     const safeTxHash = ethers.keccak256(encodedData);
-    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, mySafeContract.address]));
+    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, (await myProvider.getNetwork()).chainId, mySafeContract.target]));
 
     const encodedTransactionData = ethers.solidityPacked(
         ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
@@ -336,14 +336,14 @@ const myChildSigningKey = myChildWallet.signingKey;
     );
 
     const overlyingHash = ethers.keccak256(encodedTransactionData);
-    const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
+    const userSignatureUnserialized = myChildSigningKey.sign(overlyingHash);
     const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
     // Generate dummy overlying policy guardian smart contract signature
     const policyGuardianOverlyingSignaturePointer = ethers.solidityPacked(
         ["bytes32", "uint256", "uint8"],
         [
-            ethers.hexZeroPad(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
+            ethers.zeroPadValue(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, 32),
             2 * 65,
             0
         ]
@@ -360,7 +360,7 @@ const myChildSigningKey = myChildWallet.signingKey;
     let packedOverlyingSignatures;
 
     if (myWaymontSafeAdvancedSignerContract === undefined) {
-        if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
+        if (myChildWallet.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.target.toLowerCase()) {
             packedOverlyingSignatures = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes"],
                 [policyGuardianOverlyingSignaturePointer, userSignature, policyGuardianOverlyingSignatureData]
@@ -376,7 +376,7 @@ const myChildSigningKey = myChildWallet.signingKey;
         const advancedSignerOverlyingSignaturePointer = ethers.solidityPacked(
             ["bytes32", "uint256", "uint8"],
             [
-                ethers.hexZeroPad(myWaymontSafeAdvancedSignerContract.address, 32),
+                ethers.zeroPadValue(myWaymontSafeAdvancedSignerContract.target, 32),
                 (65 * 2) + 32 + 65,
                 0
             ]
@@ -390,7 +390,7 @@ const myChildSigningKey = myChildWallet.signingKey;
         );
 
         // Pack overlying signatures
-        if (myWaymontSafeAdvancedSignerContract.address.toLowerCase() > waymontSafePolicyGuardianSignerContract.address.toLowerCase()) {
+        if (myWaymontSafeAdvancedSignerContract.target.toLowerCase() > waymontSafePolicyGuardianSignerContract.target.toLowerCase()) {
             packedOverlyingSignatures = ethers.solidityPacked(
                 ["bytes", "bytes", "bytes", "bytes"],
                 [policyGuardianOverlyingSignaturePointer, advancedSignerOverlyingSignaturePointer, policyGuardianOverlyingSignatureData, advancedSignerOverlyingSignatureData]

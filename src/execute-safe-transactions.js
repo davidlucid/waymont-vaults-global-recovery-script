@@ -63,7 +63,7 @@ const myChildSigningKey = myChildWallet.signingKey;
     const multiSendInterface = new ethers.Interface(MULTI_SEND_ABI);
 
     let packedTransactions = "0x";
-    for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, tx.value ?? 0, ethers.hexDataLength(tx.data), tx.data]).substring(2);
+    for (const tx of transactions) packedTransactions += ethers.solidityPacked(["uint8", "address", "uint256", "uint256", "bytes"], [0, tx.to, tx.value ?? 0, ethers.dataLength(tx.data), tx.data]).substring(2);
 
     let data = multiSendInterface.encodeFunctionData("multiSend", [packedTransactions]);
 
@@ -86,7 +86,7 @@ const myChildSigningKey = myChildWallet.signingKey;
     );
 
     const safeTxHash = ethers.keccak256(encodedData);
-    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, myProvider.network.chainId, mySafeContract.address]));
+    const domainSeparator = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address"], [DOMAIN_SEPARATOR_TYPEHASH, (await myProvider.getNetwork()).chainId, mySafeContract.target]));
 
     const encodedTransactionData = ethers.solidityPacked(
         ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
@@ -94,7 +94,7 @@ const myChildSigningKey = myChildWallet.signingKey;
     );
 
     const overlyingHash = ethers.keccak256(encodedTransactionData);
-    const userSignatureUnserialized = myChildSigningKey.signDigest(overlyingHash);
+    const userSignatureUnserialized = myChildSigningKey.sign(overlyingHash);
     const userSignature = ethers.solidityPacked(["bytes32", "bytes32", "uint8"], [userSignatureUnserialized.r, userSignatureUnserialized.s, userSignatureUnserialized.v]);
 
     // Dispatch TX
