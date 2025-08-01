@@ -28,7 +28,7 @@ assert(process.argv[6].split(" ").length === 12, "The mnemonic seed phrase you e
 
 // Instantiate provider, EOA, and contracts
 let myProvider = new ethers.JsonRpcProvider(process.argv[2]);
-let myFundedAccountForGas = new ethers.Wallet(process.argv[5], myProvider);
+let myFundedAccountForGas = new ethers.NonceManager(new ethers.Wallet(process.argv[5], myProvider));
 let mySafeContract = new ethers.Contract(process.argv[3], SAFE_ABI, myFundedAccountForGas);
 let waymontSafePolicyGuardianSignerContract = new ethers.Contract(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_ABI, myFundedAccountForGas);
 
