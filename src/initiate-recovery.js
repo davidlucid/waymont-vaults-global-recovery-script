@@ -14,7 +14,7 @@ const WAYMONT_SAFE_ADVANCED_SIGNER_ABI = require("./abi/WaymontSafeAdvancedSigne
 const WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS = "0x5B34e701393b197d267e6619d01711121F3e87Ce";
 const QUEUE_DISABLE_POLICY_GUARDIAN_TYPEHASH = "0xd5fa5ce164fba34243c3b3b9c5346acc2eae6f31655b86516d465566d0ba53f7";
 const DOMAIN_SEPARATOR_TYPEHASH = "0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218";
-const HD_PATH = "m/44'/60'/0'/0";
+const HD_PATH = "m/44/60/0/0";
 
 // Input validation
 assert(process.argv.length == 7, "Invalid number of arguments supplied--you should have exactly 5 arguments.");
