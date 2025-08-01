@@ -2,6 +2,10 @@ const assert = require("assert");
 const { expect } = require("chai");
 const hre = require("hardhat");
 const ethers = hre.ethers;
+const bip39 = require("bip39");
+const { BIP32Factory } = require("bip32");
+const ecc = require("tiny-secp256k1");
+const bip32 = BIP32Factory(ecc);
 const childProcess = require("child_process");
 const crypto = require("crypto");
 
@@ -52,7 +56,8 @@ function runAndWait(script, args, silent) {
 }
 
 // Get HD node child signing key for Safe
-const myNode = ethers.HDNodeWallet.fromPhrase(EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE);
+const mySeed = await bip39.mnemonicToSeed(EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE);
+const myNode = bip32.fromSeed(mySeed);
 const myChild = myNode.derivePath(HD_PATH + "/" + EXAMPLE_VAULT_SUBKEY_INDEX);
 const myChildWallet = new ethers.Wallet(myChild.privateKey);
 
