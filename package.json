@@ -26,6 +26,9 @@
     "@nomicfoundation/hardhat-toolbox": "^6.1.0"
   },
   "dependencies": {
-    "ethers": "^6.15.0"
+    "bip32": "^5.0.0-rc.0",
+    "bip39": "^3.1.0",
+    "ethers": "^6.15.0",
+    "tiny-secp256k1": "^2.2.4"
   }
 }
