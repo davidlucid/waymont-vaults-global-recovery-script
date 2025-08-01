@@ -31,10 +31,10 @@ let mySafeContract = new ethers.Contract(process.argv[3], SAFE_ABI, myFundedAcco
 let waymontSafePolicyGuardianSignerContract = new ethers.Contract(WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_CONTRACT_ADDRESS, WAYMONT_SAFE_POLICY_GUARDIAN_SIGNER_ABI, myFundedAccountForGas);
 
 // Get HD node child signing key for Safe specified by user
-const mySeed = await bip39.mnemonicToSeed(process.argv[6]);
+const mySeed = bip39.mnemonicToSeedSync(process.argv[6]);
 const myNode = bip32.fromSeed(mySeed);
 const myChild = myNode.derivePath(HD_PATH + `/${process.argv[4]}`);
-const myChildWallet = new ethers.Wallet(myChild.privateKey);
+const myChildWallet = new ethers.Wallet("0x" + Buffer.from(myChild.privateKey).toString("hex"));
 const myChildSigningKey = myChildWallet.signingKey;
 
 // Run async code

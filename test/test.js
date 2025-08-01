@@ -56,10 +56,10 @@ function runAndWait(script, args, silent) {
 }
 
 // Get HD node child signing key for Safe
-const mySeed = await bip39.mnemonicToSeed(EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE);
+const mySeed = bip39.mnemonicToSeedSync(EXAMPLE_ROOT_MNEMONIC_SEED_PHRASE);
 const myNode = bip32.fromSeed(mySeed);
 const myChild = myNode.derivePath(HD_PATH + "/" + EXAMPLE_VAULT_SUBKEY_INDEX);
-const myChildWallet = new ethers.Wallet(myChild.privateKey);
+const myChildWallet = new ethers.Wallet("0x" + Buffer.from(myChild.privateKey).toString("hex"));
 
 // Address prediction functions
 function predictWaymontSafeAdvancedSignerAddress(predictedSafeAddress, signers, threshold, deploymentNonce) {
